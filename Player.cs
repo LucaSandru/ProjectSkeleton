@@ -11,7 +11,7 @@ public class Player
 	public int Height { get; private set; } = 20;
 
 	// How fast the spaceship moves
-	public int Speed { get; private set; } = 10;
+	public int Speed { get; private set; } = 17;
 
 	// Player stats
 	public int Lives { get; set; } = 3;

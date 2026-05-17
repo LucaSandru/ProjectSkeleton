@@ -73,10 +73,31 @@ public static class Program
         // Create our spaceship near the bottom center of the 800x800 screen
         var player = new Player(370, 700);
 
-        // Spawn a falling item at X:400 (middle), Y:0 (top of screen)
-        var goodItem = new FallingItem(400, 0);
+
+        // Create a list to hold all of our falling items
+        var itemsList = new List<FallingItem>();
+        int numberOfItems = 3; // You can change this to 2, 3, 5, etc. to set the difficulty!
+
+
+        var random = new Random();
+
+        for (int i = 0; i < numberOfItems; i++)
+        {
+            // Spawn each item at a random horizontal position and staggered heights
+            // Staggering the Y positions (like 0, -150, -300) stops them from falling in a perfect, boring row
+            int randomX = random.Next(0, 800 - 30);
+            int staggeredY = -i * 200;
+
+            // 70% chance to start as a good item, 30% chance to start as a bad item
+            bool initialIsGood = random.Next(0, 10) < 7;  
+
+            itemsList.Add(new FallingItem(randomX, staggeredY, initialIsGood));
+        }
+
 
         bool quit = false;
+
+        int score = 0;
         while (!quit)
         {
             // FIXED 1: The unsafe block correctly wraps the Event Loop pointer (&ev)
@@ -174,11 +195,58 @@ public static class Program
                 player.MoveRight(800); // 800 is the width of our window
             }
 
-            // Update the falling item
-            goodItem.Update();
 
-            var elapsed = timer.Elapsed;
-            timer.Restart();
+
+            // Loop through every item in our game
+            foreach (var item in itemsList)
+            {
+                // Move this specific item down
+                item.Update();
+
+                // Check collision between the player and this specific item
+                bool isColliding = player.X < item.X + item.Width &&
+                                   player.X + player.Width > item.X &&
+                                   player.Y < item.Y + item.Height &&
+                                   player.Y + player.Height > item.Y;
+
+                if (isColliding)
+                {
+                    // Handle collision consequences based on item type
+                    if (item.IsGood)
+                    {
+                        score += 10;
+                        Console.WriteLine($"Item Caught! +10 Points. Score: {score}");
+                    }
+                    else
+                    {
+                        score -= 15;
+                        Console.WriteLine($"Hit a Bad Item! -15 Points. Score: {score}");
+                    }
+
+                    // Reset to top, randomize position, and randomize its type for next time
+                    item.Y = 0;
+                    item.X = random.Next(0, 800 - item.Width);
+                    item.IsGood = random.Next(0, 10) < 7;
+                }
+                else if (item.Y > 800)
+                {
+
+                    if (item.IsGood)
+                    {
+                        Console.WriteLine($"Good Item slip away! -15 Points. Score: {score}");
+                    }
+                    // Item fell off the screen without hitting the player. 
+                    // No score change needed (ignoring bad items is good play!).
+
+                    // Reset to top, randomize position, and randomize its type for next time
+                    item.Y = 0;
+                    item.X = random.Next(0, 800 - item.Width);
+                    item.IsGood = random.Next(0, 10) < 7;
+                }
+            }
+
+
+
 
             unsafe
             {
@@ -193,13 +261,27 @@ public static class Program
                 var playerRect = new Rectangle<int>(player.X, player.Y, player.Width, player.Height);
 
                 sdl.RenderFillRect(r, &playerRect);
-                
-                // Draw the falling item as a Green Rectangle
-                sdl.SetRenderDrawColor(r, 0, 255, 0, 255);
-                var goodItemRect = new Rectangle<int>(goodItem.X, goodItem.Y, goodItem.Width, goodItem.Height);
-                sdl.RenderFillRect(r, &goodItemRect);
 
-                // 3. Show it on screen
+                // Draw ALL the items inside itemsList with dynamic colors
+                foreach (var item in itemsList)
+                {
+                    if (item.Y >= 0)
+                    {
+                        // Choose Green if Good, Red if Bad
+                        if (item.IsGood)
+                        {
+                            sdl.SetRenderDrawColor(r, 0, 255, 0, 255); // Green
+                        }
+                        else
+                        {
+                            sdl.SetRenderDrawColor(r, 255, 0, 0, 255); // Red
+                        }
+
+                        var itemRect = new Rectangle<int>(item.X, item.Y, item.Width, item.Height);
+                        sdl.RenderFillRect(r, &itemRect);
+                    }
+                }
+
                 sdl.RenderPresent(r);
             }
 
@@ -207,7 +289,7 @@ public static class Program
         }
 
 
-        // FIXED 4: Clean up happens completely outside the while loop, destroying both renderer and window!
+        // Clean up the renderer and window!
         unsafe
         {
             sdl.DestroyRenderer((Renderer*)renderer);

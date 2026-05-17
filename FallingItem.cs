@@ -8,10 +8,17 @@ public class FallingItem
     public int Height { get; set; } = 30;
     public int Speed { get; set; } = 5;   // How fast it falls down the screen
 
-    public FallingItem(int startX, int startY)
+
+
+    // Track whether this item is currently good (green) or bad (red)
+    public bool IsGood { get; set; } = true;
+
+
+    public FallingItem(int startX, int startY, bool isGood)
     {
         X = startX;
         Y = startY;
+        IsGood = isGood;
     }
 
     // This method makes gravity work by pushing the item down
