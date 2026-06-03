@@ -1,29 +1,28 @@
 namespace TheAdventure;
 
-public class FallingItem
+public class FallingItem : IGameEntity
 {
     public int X { get; set; }
     public int Y { get; set; }
-    public int Width { get; set; } = 30;  // A bit smaller than the player
-    public int Height { get; set; } = 30;
-    public int Speed { get; set; } = 5;   // How fast it falls down the screen
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public bool IsGood { get; set; }
 
+    // Change this from 'private readonly' to a public get/set property
+    public int Speed { get; set; }
 
-
-    // Track whether this item is currently good (green) or bad (red)
-    public bool IsGood { get; set; } = true;
-
-
-    public FallingItem(int startX, int startY, bool isGood)
+    public FallingItem(int startX, int startY, int speed, bool isGood)
     {
         X = startX;
         Y = startY;
+        Width = 35;
+        Height = 35;
         IsGood = isGood;
+        Speed = speed; // Assign dynamic speed
     }
 
-    // This method makes gravity work by pushing the item down
     public void Update()
     {
-        Y += Speed;
+        Y += Speed; // Drops down faster or slower depending on current Speed value
     }
 }

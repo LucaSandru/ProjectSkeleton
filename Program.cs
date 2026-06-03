@@ -3,15 +3,35 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using Silk.NET.SDL;
 using Silk.NET.Maths;
+using System.Linq;
+using System.IO;
 
 namespace TheAdventure;
 
 public static class Program
 {
+    private static Sdl sdl = null!;
+    private static IntPtr renderer;
+
+    private const int VirtualWidth = 800;
+    private const int VirtualHeight = 800;
+
+    public static T LoadGameConfig<T>(string value, Func<string, T> parser)
+    {
+        try
+        {
+            return parser(value);
+        }
+        catch
+        {
+            throw new GameAssetException($"Failed to safely parse game configuration value: '{value}'");
+        }
+    }
+
     public static void Main()
     {
         var random = new Random();
-        var sdl = new Sdl(new SdlContext());
+        sdl = new Sdl(new SdlContext());
 
         ulong framesRenderedCounter = 0;
         var timer = new Stopwatch();
@@ -46,43 +66,95 @@ public static class Program
                 if (ex != null) throw ex;
                 throw new Exception("Failed to create window.");
             }
+
+            renderer = (IntPtr)sdl.CreateRenderer((Window*)window, -1, (uint)RendererFlags.Accelerated | (uint)RendererFlags.Presentvsync);
+            if (renderer == IntPtr.Zero)
+            {
+                var ex = sdl.GetErrorAsException();
+                if (ex != null) throw ex;
+                throw new Exception("Failed to create renderer.");
+            }
         }
 
-        IntPtr renderer;
         unsafe
         {
-            renderer = (IntPtr)sdl.CreateRenderer((Window*)window, -1, (uint)RendererFlags.Accelerated);
-            sdl.RenderSetVSync((Renderer*)renderer, 1);
+            sdl.RenderSetLogicalSize((Renderer*)renderer, VirtualWidth, VirtualHeight);
         }
 
-        if (renderer == IntPtr.Zero)
-        {
-            var ex = sdl.GetErrorAsException();
-            if (ex != null) throw ex;
-            throw new Exception("Failed to create renderer.");
-        }
-
-        // Setup Player and Items
-        var player = new Player(370, 700);
+        var player = new Player();
         var itemsList = new List<FallingItem>();
         int numberOfItems = 3;
 
         for (int i = 0; i < numberOfItems; i++)
         {
-            int randomX = random.Next(0, 800 - 30);
+            int randomX = random.Next(0, VirtualWidth - 30);
             int staggeredY = -i * 200;
+            int itemSpeed = 5;
             bool initialIsGood = random.Next(0, 10) < 7;
-            itemsList.Add(new FallingItem(randomX, staggeredY, initialIsGood));
+
+            itemsList.Add(new FallingItem(randomX, staggeredY, itemSpeed, initialIsGood));
         }
 
         bool quit = false;
         int score = 0;
+        int highscore = 0;
         int lives = 3;
         bool isGameOver = false;
         bool isGameWon = false;
+        int currentLevel = 1;
+
+        string highscoreFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "highscore.txt");
+        if (System.IO.File.Exists(highscoreFile))
+        {
+            using (System.IO.StreamReader reader = new System.IO.StreamReader(highscoreFile))
+            {
+                string? fileContent = reader.ReadLine();
+                if (int.TryParse(fileContent, out int savedHighScore))
+                {
+                    highscore = savedHighScore;
+                }
+            }
+        }
+
+        const uint targetFps = 60;
+        const uint frameDelayMs = 1000 / targetFps;
 
         while (!quit)
         {
+            uint frameStartTicks = sdl.GetTicks();
+
+            int calculatedLevel = 1 + (score / 60);
+            int currentMaxItemSpeed = 5 + (calculatedLevel * 1);
+
+            if (calculatedLevel != currentLevel)
+            {
+                currentLevel = calculatedLevel;
+                player.Speed = 16 + currentLevel;
+                itemsList.ForEach(item => item.Speed = currentMaxItemSpeed);
+            }
+
+            if (score > highscore)
+            {
+                highscore = score;
+                try
+                {
+                    using (System.IO.StreamWriter writer = new System.IO.StreamWriter(highscoreFile, false))
+                    {
+                        writer.Write(highscore);
+                        writer.Flush();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Disk write postponed: {ex.Message}");
+                }
+            }
+
+            if (score >= 300)
+            {
+                isGameWon = true;
+            }
+
             unsafe
             {
                 while (sdl.PollEvent(&ev) != 0)
@@ -96,13 +168,23 @@ public static class Program
                     switch (ev.Type)
                     {
                         case (uint)EventType.Keydown:
-                            Console.WriteLine($"Key down: {(KeyCode)ev.Key.Keysym.Scancode}");
-
-                            // RESET MECHANIC: Press 'P' to restart when game is over or won
-                            if (isGameOver || isGameWon)
+                            if (ev.Key.Keysym.Sym == (int)KeyCode.F11 ||
+                                (ev.Key.Keysym.Sym == (int)KeyCode.Return && (ev.Key.Keysym.Mod & (uint)Keymod.Alt) > 0))
                             {
-                                // FIXED: Added explicit (int) cast to Scancode to resolve compiler error
-                                if (ev.Key.Keysym.Sym == 112 || (int)ev.Key.Keysym.Scancode == 19)
+                                uint flags = sdl.GetWindowFlags((Window*)window);
+                                if ((flags & (uint)WindowFlags.FullscreenDesktop) > 0)
+                                {
+                                    sdl.SetWindowFullscreen((Window*)window, 0);
+                                }
+                                else
+                                {
+                                    sdl.SetWindowFullscreen((Window*)window, (uint)WindowFlags.FullscreenDesktop);
+                                }
+                            }
+
+                            if (isGameOver)
+                            {
+                                if (ev.Key.Keysym.Sym == 112 || (int)ev.Key.Keysym.Scancode == 19) // 'P' key
                                 {
                                     score = 0;
                                     lives = 3;
@@ -112,11 +194,11 @@ public static class Program
                                     for (int i = 0; i < itemsList.Count; i++)
                                     {
                                         itemsList[i].Y = -i * 200;
-                                        itemsList[i].X = random.Next(0, 800 - itemsList[i].Width);
+                                        itemsList[i].X = random.Next(0, VirtualWidth - itemsList[i].Width);
                                         itemsList[i].IsGood = random.Next(0, 10) < 7;
+                                        itemsList[i].Speed = 5;
                                     }
                                     player.X = 370;
-                                    Console.WriteLine("--- Game Restarted! ---");
                                 }
                             }
                             break;
@@ -124,8 +206,7 @@ public static class Program
                 }
             }
 
-            // FREEZE MECHANIC: Only update physics if the game is actively running
-            if (!isGameOver && !isGameWon)
+            if (!isGameOver)
             {
                 if (keyboardState[(byte)KeyCode.Left] > 0)
                 {
@@ -133,7 +214,7 @@ public static class Program
                 }
                 if (keyboardState[(byte)KeyCode.Right] > 0)
                 {
-                    player.MoveRight(800);
+                    player.MoveRight(VirtualWidth);
                 }
 
                 foreach (var item in itemsList)
@@ -150,115 +231,129 @@ public static class Program
                         if (item.IsGood)
                         {
                             score += 10;
-                            Console.WriteLine($"Item Caught! +10 Points. Score: {score} | Lives: {lives}");
-                            if (score >= 100) isGameWon = true;
                         }
                         else
                         {
                             lives--;
-                            Console.WriteLine($"Ouch! Hit a Bad Item! -1 Life. Score: {score} | Lives: {lives}");
                             if (lives <= 0) isGameOver = true;
                         }
 
                         item.Y = 0;
-                        item.X = random.Next(0, 800 - item.Width);
+                        item.X = random.Next(0, VirtualWidth - item.Width);
                         item.IsGood = random.Next(0, 10) < 7;
+                        item.Speed = currentMaxItemSpeed;
                     }
-                    else if (item.Y > 800)
+                    else if (item.Y > VirtualHeight)
                     {
                         if (item.IsGood)
                         {
                             lives--;
-                            Console.WriteLine($"Oh no! You missed a Good Item! -1 Life. Score: {score} | Lives: {lives}");
                             if (lives <= 0) isGameOver = true;
                         }
 
                         item.Y = 0;
-                        item.X = random.Next(0, 800 - item.Width);
+                        item.X = random.Next(0, VirtualWidth - item.Width);
                         item.IsGood = random.Next(0, 10) < 7;
+                        item.Speed = currentMaxItemSpeed;
                     }
                 }
             }
 
             // RENDER SYSTEM
-            // RENDER SYSTEM
             unsafe
             {
                 var r = (Renderer*)renderer;
 
-                // Screen ALWAYS clears to pure space black
                 sdl.SetRenderDrawColor(r, 0, 0, 0, 255);
                 sdl.RenderClear(r);
 
-                // ==========================================================
-                // 1. LIVE HUD DISPLAY (Top-Left Score Counter)
-                // ==========================================================
-                // Formats the live text string dynamically every single frame
-                string liveScoreText = $"SCORE: {score}";
+                if (isGameWon)
+                {
+                    DrawCustomText($"SCORE: {score} WINNER!", 15, 15, 2, 255, 215, 0);
+                }
+                else
+                {
+                    DrawCustomText($"SCORE: {score} / 300", 15, 15, 2, 255, 0, 0);
+                }
 
-                // Draws at (X: 15, Y: 15) with a compact pixel size of 2
-                DrawCustomText(liveScoreText, 15, 15, 2, 255, 255, 255);
-                // ==========================================================
+                DrawCustomText("LIFE:", VirtualWidth - 190, 20, 2, 0, 150, 255);
+                sdl.SetRenderDrawColor(r, 255, 0, 0, 255);
 
-                // Draw the Player (Blue)
-                sdl.SetRenderDrawColor(r, 0, 150, 255, 255);
+                int dotSize = 16;
+                int dotSpacing = 10;
+                for (int i = 0; i < lives; i++)
+                {
+                    int dotX = VirtualWidth - 100 + (i * (dotSize + dotSpacing));
+                    int dotY = 22;
+                    var lifeRect = new Rectangle<int>(dotX, dotY, dotSize, dotSize);
+                    sdl.RenderFillRect(r, &lifeRect);
+                }
+
+                // --- DRAW PLAYER OBJECT (Neon Cyan/Blue) ---
+                sdl.SetRenderDrawColor(r, 0, 180, 255, 255);
                 var playerRect = new Rectangle<int>(player.X, player.Y, player.Width, player.Height);
                 sdl.RenderFillRect(r, &playerRect);
 
-                // Draw all Falling Objects (Green / Red)
+                // --- DRAW FALLING ITEMS OBJECTS (Green for Money, Red for Virus) ---
                 foreach (var item in itemsList)
                 {
                     if (item.Y >= 0)
                     {
-                        if (item.IsGood)
-                            sdl.SetRenderDrawColor(r, 0, 255, 0, 255);
-                        else
-                            sdl.SetRenderDrawColor(r, 255, 0, 0, 255);
-
                         var itemRect = new Rectangle<int>(item.X, item.Y, item.Width, item.Height);
+
+                        if (item.IsGood)
+                        {
+                            sdl.SetRenderDrawColor(r, 0, 255, 100, 255); // Green object
+                        }
+                        else
+                        {
+                            sdl.SetRenderDrawColor(r, 255, 50, 50, 255); // Red object
+                        }
                         sdl.RenderFillRect(r, &itemRect);
                     }
                 }
 
-                // CENTERED UI PANEL OVERLAY (Game Over / Victory Screen)
-                if (isGameOver || isGameWon)
+                if (isGameOver)
                 {
-                    // Dark grey central UI container box
                     sdl.SetRenderDrawColor(r, 25, 25, 25, 255);
-                    var panelRect = new Rectangle<int>(150, 250, 500, 300);
+                    var panelRect = new Rectangle<int>(150, 220, 500, 360);
                     sdl.RenderFillRect(r, &panelRect);
 
-                    // Thin colored accent border around the box
-                    if (isGameWon)
-                        sdl.SetRenderDrawColor(r, 0, 255, 0, 255); // Green border
-                    else
-                        sdl.SetRenderDrawColor(r, 255, 0, 0, 255); // Red border
-                    var borderRect = new Rectangle<int>(148, 248, 504, 304);
+                    sdl.SetRenderDrawColor(r, 255, 0, 0, 255);
+                    var borderRect = new Rectangle<int>(148, 218, 504, 364);
                     sdl.RenderDrawRect(r, &borderRect);
 
-                    // Render aligned text lines inside the display card
-                    if (isGameWon)
+                    DrawCustomText("GAME OVER!", 275, 250, 4, 255, 0, 0);
+
+                    if (score >= 300)
                     {
-                        DrawCustomText("YOU WON!", 304, 290, 6, 0, 255, 0);
-                        string scoreText = $"POINTS: {score}";
-                        int scoreX = 400 - (scoreText.Length * 24) / 2;
-                        DrawCustomText(scoreText, scoreX, 360, 4, 255, 255, 255);
-                        DrawCustomText("PRESS P TO PLAY AGAIN!", 224, 430, 4, 200, 200, 200);
+                        DrawCustomText("WINNER! SCORE > 300!", 240, 310, 3, 0, 255, 0);
                     }
                     else
                     {
-                        DrawCustomText("YOU LOST!", 292, 290, 6, 255, 0, 0);
-                        string scoreText = $"POINTS: {score}";
-                        int scoreX = 400 - (scoreText.Length * 24) / 2;
-                        DrawCustomText(scoreText, scoreX, 360, 4, 255, 255, 255);
-                        DrawCustomText("PRESS P TO TRY AGAIN!", 232, 430, 4, 200, 200, 200);
+                        DrawCustomText("LOSER! SCORE < 300!", 250, 310, 3, 255, 0, 0);
                     }
+
+                    string scoreText = $"FINAL SCORE: {score}";
+                    int scoreX = 400 - (scoreText.Length * 24) / 2;
+                    DrawCustomText(scoreText, scoreX, 370, 4, 0, 150, 255);
+
+                    string hiScoreText = $"HIGHSCORE: {highscore}";
+                    int hiScoreX = 400 - (hiScoreText.Length * 24) / 2;
+                    DrawCustomText(hiScoreText, hiScoreX, 410, 4, 255, 255, 0);
+
+                    DrawCustomText("PRESS P TO RESTART", 220, 490, 3, 200, 200, 200);
                 }
 
                 sdl.RenderPresent(r);
             }
 
             framesRenderedCounter++;
+            uint frameTimeMs = sdl.GetTicks() - frameStartTicks;
+            if (frameTimeMs < frameDelayMs)
+            {
+                sdl.Delay(frameDelayMs - frameTimeMs);
+            }
         }
 
         unsafe
@@ -267,63 +362,75 @@ public static class Program
             sdl.DestroyWindow((Window*)window);
         }
         sdl.Quit();
+    }
 
-        // Retro Text Engine Method
-        void DrawCustomText(string text, int startX, int startY, int pixelSize, byte red, byte green, byte blue)
+    private static void DrawCustomText(string text, int startX, int startY, int pixelSize, byte red, byte green, byte blue)
+    {
+        unsafe
         {
-            unsafe
+            var r = (Renderer*)renderer;
+            sdl.SetRenderDrawColor(r, red, green, blue, 255);
+            int currentX = startX;
+
+            foreach (char c in text.ToUpper())
             {
-                var r = (Renderer*)renderer;
-                sdl.SetRenderDrawColor(r, red, green, blue, 255);
-                int currentX = startX;
-                foreach (char c in text.ToUpper())
+                if (c == ' ') { currentX += 6 * pixelSize; continue; }
+
+                int mask = c switch
                 {
-                    if (c == ' ') { currentX += 4 * pixelSize; continue; }
-                    int mask = c switch
+                    'W' => 0b10001_10001_10101_10101_01010,
+                    'N' => 0b10001_11001_10101_10011_10001,
+                    'C' => 0b01110_10000_10000_10000_01110,
+                    'R' => 0b11110_10001_11110_10010_10001,
+                    'S' => 0b01111_10000_01110_00001_11110,
+                    'O' => 0b01110_10001_10001_10001_01110,
+                    'E' => 0b11111_10000_11110_10000_11111,
+                    'Y' => 0b10001_10001_01010_00100_00100,
+                    'U' => 0b10001_10001_10001_10001_01110,
+                    'L' => 0b10000_10000_10000_10000_11111,
+                    'T' => 0b11111_00100_00100_00100_00100,
+                    'P' => 0b11110_10001_11110_10000_10000,
+                    'A' => 0b01110_10001_11111_10001_10001,
+                    'I' => 0b01110_00100_00100_00100_01110,
+                    'G' => 0b01110_10000_11110_10001_01110,
+                    'M' => 0b10001_11011_10101_10001_10001,
+                    'H' => 0b10001_10001_11111_10001_10001,
+                    '!' => 0b00100_00100_00100_00000_00100,
+                    ':' => 0b00000_01100_00000_01100_00000,
+                    'V' => 0b10001_10001_01010_01010_00100,
+                    'F' => 0b11111_10000_11110_10000_10000,
+                    '0' => 0b01110_10011_10101_11001_01110,
+                    '1' => 0b00100_01100_00100_00100_01110,
+                    '2' => 0b01110_10001_00010_00100_11111,
+                    '3' => 0b11111_00010_01110_00010_11111,
+                    '4' => 0b10001_10001_11111_00001_00001,
+                    '5' => 0b11111_10000_11110_00001_11110,
+                    '6' => 0b01110_10000_11110_10001_01110,
+                    '7' => 0b11111_00001_00010_00100_00100,
+                    '8' => 0b01110_10001_01110_10001_01110,
+                    '9' => 0b01110_10001_01111_00001_01110,
+                    '_' => 0b11111_11111_11111_11111_11111,
+                    '/' => 0b00001_00010_00100_01100_10000,
+                    '>' => 0b10000_01000_00100_01000_10000,
+                    '<' => 0b00100_01000_10000_01000_00100,
+                    '=' => 0b00000_11111_00000_11111_00000,
+                    '-' => 0b00000_00000_11111_00000_00000,
+                    _ => 0
+                };
+
+                for (int row = 0; row < 5; row++)
+                {
+                    for (int col = 0; col < 5; col++)
                     {
-                        'C' => 0b111_100_100_100_111, // Open left-facing bracket shape
-                        'R' => 0b111_101_111_110_101, // Clear leg separation for R
-                        'S' => 0b111_100_111_001_111,
-                        'O' => 0b111_101_101_101_111,
-                        'E' => 0b111_100_111_100_111,
-                        'Y' => 0b101_101_010_010_010,
-                        'U' => 0b101_101_101_101_111,
-                        'L' => 0b100_100_100_100_111,
-                        'T' => 0b111_010_010_010_010,
-                        'W' => 0b101_101_101_111_101,
-                        'N' => 0b101_111_101_101_101,
-                        'P' => 0b111_101_111_100_100,
-                        'A' => 0b111_101_111_101_101,
-                        'I' => 0b111_010_010_010_111,
-                        'G' => 0b111_100_101_101_111,
-                        '!' => 0b010_010_010_000_010,
-                        ':' => 0b000_010_000_010_000,
-                        '0' => 0b111_101_101_101_111,
-                        '1' => 0b010_110_010_010_111,
-                        '2' => 0b111_001_111_100_111,
-                        '3' => 0b111_001_111_001_111,
-                        '4' => 0b101_101_111_001_001,
-                        '5' => 0b111_100_111_001_111,
-                        '6' => 0b111_100_111_101_111,
-                        '7' => 0b111_001_010_010_010,
-                        '8' => 0b111_101_111_101_111,
-                        '9' => 0b111_101_111_001_111,
-                        _ => 0b111_111_111_111_111  // Square block for unsupported chars
-                    };
-                    for (int row = 0; row < 5; row++)
-                    {
-                        for (int col = 0; col < 3; col++)
+                        int bitIndex = 24 - (row * 5 + col);
+                        if (((mask >> bitIndex) & 1) == 1)
                         {
-                            int bitIndex = 14 - (row * 3 + col);
-                            if (((mask >> bitIndex) & 1) == 1)
-                            {
-                                var pixelRect = new Rectangle<int>(currentX + col * pixelSize, startY + row * pixelSize, pixelSize, pixelSize);
-                                sdl.RenderFillRect(r, &pixelRect);
-                            }
+                            var pixelRect = new Rectangle<int>(currentX + col * pixelSize, startY + row * pixelSize, pixelSize, pixelSize);
+                            sdl.RenderFillRect(r, &pixelRect);
                         }
                     }
-                    currentX += 4 * pixelSize;
                 }
+                currentX += 6 * pixelSize;
             }
         }
     }

@@ -1,42 +1,55 @@
 namespace TheAdventure;
 
-public class Player
+
+public class Player : IGameEntity
 {
-	// The player's position on the screen
-	public int X { get; set; }
-	public int Y { get; set; }
+    // Interface requirements
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Width { get; private set; }
+    public int Height { get; private set; }
 
-	// The size of the spaceship (a rectangle for now)
-	public int Width { get; private set; } = 60;
-	public int Height { get; private set; } = 20;
+    // Movement speed constant
+    public int Speed { get; set; }
 
-	// How fast the spaceship moves
-	public int Speed { get; private set; } = 17;
+    public Player()
+    {
+        // Initial spawning position matching your central main loop defaults
+        X = 370;
+        Y = 700;
+        Width = 105;
+        Height = 30;
+        Speed = 10; // Adjust as needed for desired movement responsiveness
+    }
 
-	// Player stats
-	public int Lives { get; set; } = 3;
-	public int Score { get; set; } = 0;
+    /// Fulfills the IGameEntity interface contract.
+    /// Player movement is driven externally by real-time keyboard events,
+    /// so this loop tick check can safely remain clear.
+    public void Update()
+    {
+        // Intentionally left blank to fulfill interface layout cleanly
+    }
 
-	public Player(int startX, int startY)
-	{
-		X = startX;
-		Y = startY;
-	}
+    /// Shifts the spaceship position safely to the left, stopping at the boundary.
+    public void MoveLeft()
+    {
+        X -= Speed;
+        if (X < 0)
+        {
+            X = 0;
+        }
+    }
 
-	// Methods to move the ship
-	public void MoveLeft()
-	{
-		X -= Speed;
-
-		// Prevent going off the left edge (0)
-		if (X < 0) X = 0;
-	}
-
-	public void MoveRight(int screenWidth)
-	{
-		X += Speed;
-
-		// Prevent going off the right edge
-		if (X + Width > screenWidth) X = screenWidth - Width;
-	}
+    /// <summary>
+    /// Shifts the spaceship position safely to the right, stopping at the virtual width boundary.
+    /// </summary>
+    /// <param name="virtualWidth">The maximum design width of the game window (e.g., 800)</param>
+    public void MoveRight(int virtualWidth)
+    {
+        X += Speed;
+        if (X + Width > virtualWidth)
+        {
+            X = virtualWidth - Width;
+        }
+    }
 }
