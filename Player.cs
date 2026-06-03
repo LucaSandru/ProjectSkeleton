@@ -3,8 +3,8 @@ namespace TheAdventure;
 public class Player
 {
 	// The player's position on the screen
-	public int X { get; private set; }
-	public int Y { get; private set; }
+	public int X { get; set; }
+	public int Y { get; set; }
 
 	// The size of the spaceship (a rectangle for now)
 	public int Width { get; private set; } = 60;
