@@ -155,6 +155,8 @@ public class GameRenderer
 
     private unsafe void DrawCustomText(string text, int startX, int startY, int pixelSize, byte red, byte green, byte blue)
     {
+        // AI-generated
+
         var renderer = (Renderer*)_renderer;
         _sdl.SetRenderDrawColor(renderer, red, green, blue, 255);
 
@@ -234,5 +236,8 @@ public class GameRenderer
 
             currentX += 6 * pixelSize;
         }
+
+        // end AI-generated
     }
+
 }

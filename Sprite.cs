@@ -1,3 +1,5 @@
+// AI-generated
+
 using Silk.NET.Maths;
 using Silk.NET.SDL;
 using StbImageSharp;
@@ -56,3 +58,5 @@ public sealed unsafe class Sprite : IDisposable
         _disposed = true;
     }
 }
+
+// end AI-generated

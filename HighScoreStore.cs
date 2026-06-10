@@ -1,3 +1,5 @@
+// AI-generated
+
 namespace TheAdventure;
 
 public class HighScoreStore
@@ -27,4 +29,6 @@ public class HighScoreStore
     {
         File.WriteAllText(_filePath, score.ToString());
     }
+
+    // end AI-generated
 }

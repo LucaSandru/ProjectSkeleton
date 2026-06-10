@@ -1,3 +1,5 @@
+// AI-generated
+
 namespace TheAdventure;
 
 public static class CollisionHelper
@@ -10,3 +12,5 @@ public static class CollisionHelper
                first.Y + first.Height > second.Y;
     }
 }
+
+// end AI-generated

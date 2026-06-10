@@ -86,6 +86,8 @@ public class CatchGame
         CurrentLevel = 1;
         Status = GameStatus.Playing;
 
+        // AI-generated
+
         Player.Reset();
 
         for (int i = 0; i < _items.Count; i++)
@@ -95,10 +97,14 @@ public class CatchGame
             _items[i].Speed = 5;
             _items[i].IsGood = _random.Next(0, 10) < 7;
         }
+
+        // end AI-generated
     }
 
     private void UpdateLevel()
     {
+        // AI-generated
+
         int calculatedLevel = 1 + Score / 60;
 
         if (calculatedLevel == CurrentLevel)
@@ -115,6 +121,8 @@ public class CatchGame
         {
             item.Speed = itemSpeed;
         }
+
+        // end AI-generated
     }
 
     private void HandleCaughtItem(FallingItem item, int virtualWidth)
@@ -161,8 +169,10 @@ public class CatchGame
         return 5 + CurrentLevel;
     }
 
+    // AI-generated
     private void SaveHighScoreIfNeeded()
     {
+
         if (Score <= HighScore)
         {
             return;
@@ -171,4 +181,6 @@ public class CatchGame
         HighScore = Score;
         _highScoreStore.Save(HighScore);
     }
+
+    // end AI-generated
 }
