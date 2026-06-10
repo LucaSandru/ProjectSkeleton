@@ -12,11 +12,10 @@ Main uses:
 - Suggested splitting the original large game file into smaller files such as `CatchGame.cs`, `GameRenderer.cs`, `HighScoreStore.cs`, `CollisionHelper.cs`, and entity classes.
 - Helped generate the `Sprite.cs` file for loading and rendering PNG sprites.
 - Helped generate and extend the `DrawCustomText` pixel-font logic, including the needed letters and numbers.
-- Suggested using personalized images for the player, good falling items, bad falling items, and lives/hearts.
 - Helped generate the collision helper logic in `CollisionHelper.cs`.
 - Helped with parts of `CatchGame.cs`, especially `Restart()`, `UpdateLevel()`, and `SaveHighScoreIfNeeded()`.
 - Explained how to implement `HighScoreStore.cs` for saving and loading the high score from disk.
-- Helped debug compiler errors and improve the game-over/restart/exit logic.
+
 
 ## Fully AI-generated files or regions
 
@@ -24,8 +23,9 @@ The following files or regions were mostly AI-generated and then reviewed/edited
 
 - `Sprite.cs`
 - `CollisionHelper.cs`
-- Parts of `GameRenderer.cs`, especially `DrawCustomText`, for sdrawing the characters.
-- Parts of `CatchGame.cs`, especially `Restart()`, `UpdateLevel()`, and `SaveHighScoreIfNeeded()`
-- Parts of `HighScoreStore.cs`
+- Parts of `GameRenderer.cs`, especially `DrawCustomText()` for drawing characters and symbols.
+- Parts of `CatchGame.cs`, especially `Restart()`, `UpdateLevel()`, and `SaveHighScoreIfNeeded()`.
+- Parts of `HighScoreStore.cs`.
+- `GameAssetException.cs`.
 
-All code was reviewed, tested, and adjusted by me before submission.
+After all AI-generated code, I reviewed and tested the code, before submission.
