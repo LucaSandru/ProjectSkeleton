@@ -26,6 +26,5 @@ The following files or regions were mostly AI-generated and then reviewed/edited
 - Parts of `GameRenderer.cs`, especially `DrawCustomText()` for drawing characters and symbols.
 - Parts of `CatchGame.cs`, especially `Restart()`, `UpdateLevel()`, and `SaveHighScoreIfNeeded()`.
 - Parts of `HighScoreStore.cs`.
-- `GameAssetException.cs`.
 
 After all AI-generated code, I reviewed and tested the code, before submission.
